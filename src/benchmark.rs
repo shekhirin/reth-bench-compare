@@ -17,6 +17,7 @@ pub struct BenchmarkRunner {
     rpc_url: String,
     jwt_secret: String,
     wait_time: Option<String>,
+    warmup_blocks: u64,
 }
 
 impl BenchmarkRunner {
@@ -26,6 +27,7 @@ impl BenchmarkRunner {
             rpc_url: args.rpc_url.clone(),
             jwt_secret: args.jwt_secret_path().to_string_lossy().to_string(),
             wait_time: args.wait_time.clone(),
+            warmup_blocks: args.warmup_blocks,
         }
     }
 
@@ -74,11 +76,11 @@ impl BenchmarkRunner {
     }
 
     /// Run a warmup benchmark for cache warming
-    pub async fn run_warmup(&self, from_block: u64, warmup_blocks: u64) -> Result<()> {
-        let to_block = from_block + warmup_blocks;
+    pub async fn run_warmup(&self, from_block: u64) -> Result<()> {
+        let to_block = from_block + self.warmup_blocks;
         info!(
             "Running warmup benchmark from block {} to {} ({} blocks)",
-            from_block, to_block, warmup_blocks
+            from_block, to_block, self.warmup_blocks
         );
 
         // Build the reth-bench command for warmup (no output flag)
