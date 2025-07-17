@@ -93,6 +93,10 @@ pub struct Args {
     #[arg(long, value_name = "DURATION")]
     pub wait_time: Option<String>,
 
+    /// Number of blocks to run for cache warmup after clearing caches
+    #[arg(long, value_name = "N", default_value = "10")]
+    pub warmup_blocks: u64,
+
     #[command(flatten)]
     pub logs: LogArgs,
 
@@ -351,6 +355,14 @@ async fn run_benchmark_workflow(
 
         // Store the tip we'll unwind back to
         let original_tip = current_tip;
+
+        // Clear filesystem caches before benchmark
+        BenchmarkRunner::clear_fs_caches().await?;
+
+        // Run warmup to warm up caches
+        benchmark_runner
+            .run_warmup(current_tip)
+            .await?;
 
         // Calculate benchmark range
         // Note: reth-bench has an off-by-one error where it consumes the first block
