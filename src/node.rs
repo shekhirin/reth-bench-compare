@@ -5,7 +5,7 @@ use alloy_provider::{Provider, ProviderBuilder};
 use alloy_rpc_types_eth::SyncStatus;
 use eyre::{eyre, OptionExt, Result, WrapErr};
 #[cfg(unix)]
-use nix::sys::signal::{kill, killpg, Signal};
+use nix::sys::signal::{killpg, Signal};
 #[cfg(unix)]
 use nix::unistd::Pid;
 use reth_chainspec::Chain;

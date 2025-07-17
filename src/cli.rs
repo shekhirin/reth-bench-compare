@@ -352,6 +352,15 @@ async fn run_benchmark_workflow(
         // Store the tip we'll unwind back to
         let original_tip = current_tip;
 
+        // Clear filesystem caches before benchmark
+        BenchmarkRunner::clear_fs_caches().await?;
+
+        // Run warmup with 10 blocks to warm up caches
+        const WARMUP_BLOCKS: u64 = 10;
+        benchmark_runner
+            .run_warmup(current_tip, WARMUP_BLOCKS)
+            .await?;
+
         // Calculate benchmark range
         // Note: reth-bench has an off-by-one error where it consumes the first block
         // of the range, so we add 1 to compensate and get exactly args.blocks blocks
