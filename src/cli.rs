@@ -93,9 +93,10 @@ pub struct Args {
     #[arg(long, value_name = "DURATION")]
     pub wait_time: Option<String>,
 
-    /// Number of blocks to run for cache warmup after clearing caches
-    #[arg(long, value_name = "N", default_value = "10")]
-    pub warmup_blocks: u64,
+    /// Number of blocks to run for cache warmup after clearing caches.
+    /// If not specified, defaults to the same as --blocks
+    #[arg(long, value_name = "N")]
+    pub warmup_blocks: Option<u64>,
 
     #[command(flatten)]
     pub logs: LogArgs,
@@ -153,6 +154,11 @@ impl Args {
     pub fn output_dir_path(&self) -> PathBuf {
         let expanded = shellexpand::tilde(&self.output_dir);
         PathBuf::from(expanded.as_ref())
+    }
+
+    /// Get the effective warmup blocks value - either specified or defaults to blocks
+    pub fn get_warmup_blocks(&self) -> u64 {
+        self.warmup_blocks.unwrap_or(self.blocks)
     }
 }
 

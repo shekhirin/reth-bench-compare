@@ -27,7 +27,7 @@ impl BenchmarkRunner {
             rpc_url: args.rpc_url.clone(),
             jwt_secret: args.jwt_secret_path().to_string_lossy().to_string(),
             wait_time: args.wait_time.clone(),
-            warmup_blocks: args.warmup_blocks,
+            warmup_blocks: args.get_warmup_blocks(),
         }
     }
 
@@ -314,5 +314,40 @@ mod tests {
 
         let runner = BenchmarkRunner::new(&args);
         assert_eq!(runner.wait_time, None);
+    }
+
+    #[test]
+    fn test_warmup_blocks_defaults_to_blocks() {
+        // Test that warmup_blocks defaults to blocks value when not specified
+        let args = Args::try_parse_from([
+            "reth-bench-compare",
+            "--baseline-ref",
+            "main",
+            "--feature-ref",
+            "test",
+            "--blocks",
+            "50",
+        ])
+        .unwrap();
+
+        let runner = BenchmarkRunner::new(&args);
+        assert_eq!(runner.warmup_blocks, 50);
+
+        // Test that explicit warmup_blocks overrides the default
+        let args = Args::try_parse_from([
+            "reth-bench-compare",
+            "--baseline-ref",
+            "main",
+            "--feature-ref",
+            "test",
+            "--blocks",
+            "50",
+            "--warmup-blocks",
+            "25",
+        ])
+        .unwrap();
+
+        let runner = BenchmarkRunner::new(&args);
+        assert_eq!(runner.warmup_blocks, 25);
     }
 }
