@@ -5,7 +5,7 @@ use alloy_provider::{Provider, ProviderBuilder};
 use alloy_rpc_types_eth::SyncStatus;
 use eyre::{eyre, OptionExt, Result, WrapErr};
 #[cfg(unix)]
-use nix::sys::signal::{kill, Signal};
+use nix::sys::signal::{kill, killpg, Signal};
 #[cfg(unix)]
 use nix::unistd::Pid;
 use reth_chainspec::Chain;
@@ -383,7 +383,7 @@ impl NodeManager {
             Ok(None) => {
                 // Process is still running, proceed to stop it
                 info!(
-                    "Stopping reth node gracefully with SIGINT (PID: {})...",
+                    "Stopping process gracefully with SIGINT (PID: {})...",
                     pid
                 );
             }
@@ -394,14 +394,10 @@ impl NodeManager {
 
         #[cfg(unix)]
         {
-            // Use nix crate to send SIGINT to the process group on Unix systems
-            // Mimic Ctrl-C: negative value == process group id
-            let pgid = -(pid as i32);
-            let nix_pgid = Pid::from_raw(pgid);
+            // Send SIGINT to process group to mimic Ctrl-C behavior
+            let nix_pgid = Pid::from_raw(pid as i32);
 
-            // Ignore ESRCH error (process doesn't exist) as it may have exited between our check
-            // and now
-            match kill(nix_pgid, Signal::SIGINT) {
+            match killpg(nix_pgid, Signal::SIGINT) {
                 Ok(()) => {}
                 Err(nix::errno::Errno::ESRCH) => {
                     info!("Process group {} has already exited", pid);
