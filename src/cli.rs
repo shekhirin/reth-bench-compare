@@ -326,29 +326,37 @@ async fn run_compilation_phase(
     
     let refs = [&args.baseline_ref, &args.feature_ref];
     let ref_types = ["baseline", "feature"];
-    let mut commits = Vec::new();
     
+    // First, resolve all refs to commits using a HashMap to avoid race conditions where a ref is
+    // pushed to mid-run.
+    let mut ref_commits = std::collections::HashMap::new();
+    for &git_ref in refs.iter() {
+        if !ref_commits.contains_key(git_ref) {
+            git_manager.switch_ref(git_ref)?;
+            let commit = git_manager.get_current_commit()?;
+            ref_commits.insert(git_ref.to_string(), commit);
+            info!("Reference {} resolves to commit: {}", git_ref, &ref_commits[git_ref][..8]);
+        }
+    }
+    
+    // Now compile each ref using the resolved commits
     for (i, &git_ref) in refs.iter().enumerate() {
         let ref_type = ref_types[i];
-        info!("Compiling {} binary for reference: {}", ref_type, git_ref);
+        let commit = &ref_commits[git_ref];
+        
+        info!("Compiling {} binary for reference: {} (commit: {})", ref_type, git_ref, &commit[..8]);
         
         // Switch to target reference
         git_manager.switch_ref(git_ref)?;
         
-        // Get the current commit for this reference
-        let commit = git_manager.get_current_commit()?;
-        commits.push(commit.clone());
-        
-        info!("Reference {} resolves to commit: {}", git_ref, &commit[..8]);
-        
         // Compile reth (with caching)
-        compilation_manager.compile_reth(&commit, is_optimism)?;
+        compilation_manager.compile_reth(commit, is_optimism)?;
         
         info!("Completed compilation for {} reference", ref_type);
     }
     
-    let baseline_commit = commits[0].clone();
-    let feature_commit = commits[1].clone();
+    let baseline_commit = ref_commits[&args.baseline_ref].clone();
+    let feature_commit = ref_commits[&args.feature_ref].clone();
     
     info!("Compilation phase completed");
     Ok((baseline_commit, feature_commit))
