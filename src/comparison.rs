@@ -28,6 +28,8 @@ pub struct BenchmarkResults {
     pub ref_name: String,
     pub combined_latency_data: Vec<CombinedLatencyRow>,
     pub summary: BenchmarkSummary,
+    pub start_timestamp: Option<DateTime<Utc>>,
+    pub end_timestamp: Option<DateTime<Utc>>,
 }
 
 /// Combined latency CSV row structure
@@ -76,6 +78,8 @@ pub struct ComparisonReport {
 pub struct RefInfo {
     pub ref_name: String,
     pub summary: BenchmarkSummary,
+    pub start_timestamp: Option<DateTime<Utc>>,
+    pub end_timestamp: Option<DateTime<Utc>>,
 }
 
 /// Summary of the comparison between references
@@ -156,6 +160,31 @@ impl ComparisonGenerator {
         Ok(())
     }
 
+    /// Set the benchmark run timestamps for a reference
+    pub fn set_ref_timestamps(&mut self, ref_type: &str, start: DateTime<Utc>, end: DateTime<Utc>) -> Result<()> {
+        match ref_type {
+            "baseline" => {
+                if let Some(ref mut results) = self.baseline_results {
+                    results.start_timestamp = Some(start);
+                    results.end_timestamp = Some(end);
+                } else {
+                    return Err(eyre!("Baseline results not loaded yet"));
+                }
+            },
+            "feature" => {
+                if let Some(ref mut results) = self.feature_results {
+                    results.start_timestamp = Some(start);
+                    results.end_timestamp = Some(end);
+                } else {
+                    return Err(eyre!("Feature results not loaded yet"));
+                }
+            },
+            _ => return Err(eyre!("Unknown reference type: {}", ref_type)),
+        }
+
+        Ok(())
+    }
+
     /// Generate the final comparison report
     pub async fn generate_comparison_report(&self) -> Result<()> {
         info!("Generating comparison report...");
@@ -180,10 +209,14 @@ impl ComparisonGenerator {
             baseline: RefInfo {
                 ref_name: baseline.ref_name.clone(),
                 summary: baseline.summary.clone(),
+                start_timestamp: baseline.start_timestamp,
+                end_timestamp: baseline.end_timestamp,
             },
             feature: RefInfo {
                 ref_name: feature.ref_name.clone(),
                 summary: feature.summary.clone(),
+                start_timestamp: feature.start_timestamp,
+                end_timestamp: feature.end_timestamp,
             },
             comparison_summary,
             per_block_comparisons,
@@ -216,6 +249,8 @@ impl ComparisonGenerator {
             ref_name: ref_name.to_string(),
             combined_latency_data,
             summary,
+            start_timestamp: None,
+            end_timestamp: None,
         })
     }
 
@@ -489,6 +524,9 @@ impl ComparisonGenerator {
             baseline.avg_fcu_latency_ms,
             baseline.avg_total_latency_ms
         );
+        if let (Some(start), Some(end)) = (&report.baseline.start_timestamp, &report.baseline.end_timestamp) {
+            println!("  Started: {}, Ended: {}", start.format("%Y-%m-%d %H:%M:%S UTC"), end.format("%Y-%m-%d %H:%M:%S UTC"));
+        }
         println!();
 
         println!("Feature Summary:");
@@ -505,6 +543,9 @@ impl ComparisonGenerator {
             feature.avg_fcu_latency_ms,
             feature.avg_total_latency_ms
         );
+        if let (Some(start), Some(end)) = (&report.feature.start_timestamp, &report.feature.end_timestamp) {
+            println!("  Started: {}, Ended: {}", start.format("%Y-%m-%d %H:%M:%S UTC"), end.format("%Y-%m-%d %H:%M:%S UTC"));
+        }
         println!();
     }
 }

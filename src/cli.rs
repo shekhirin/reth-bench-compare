@@ -382,10 +382,16 @@ async fn run_benchmark_workflow(
         // Run benchmark
         let output_dir = comparison_generator.get_ref_output_dir(ref_type);
 
+        // Capture start timestamp for the benchmark run
+        let benchmark_start = chrono::Utc::now();
+
         // Run benchmark (comparison logic is handled separately by ComparisonGenerator)
         benchmark_runner
             .run_benchmark(from_block, to_block, &output_dir)
             .await?;
+
+        // Capture end timestamp for the benchmark run
+        let benchmark_end = chrono::Utc::now();
 
         // Stop node
         node_manager.stop_node(&mut node_process).await?;
@@ -395,6 +401,9 @@ async fn run_benchmark_workflow(
 
         // Store results for comparison
         comparison_generator.add_ref_results(ref_type, &output_dir)?;
+
+        // Set the benchmark run timestamps
+        comparison_generator.set_ref_timestamps(ref_type, benchmark_start, benchmark_end)?;
 
         info!("Completed {} reference benchmark", ref_type);
     }
