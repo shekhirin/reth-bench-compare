@@ -1,6 +1,6 @@
 //! Compilation operations for reth and reth-bench.
 
-use crate::git::{sanitize_git_ref, GitManager};
+use crate::git::GitManager;
 use alloy_primitives::address;
 use alloy_provider::{Provider, ProviderBuilder};
 use eyre::{eyre, Result, WrapErr};
@@ -50,75 +50,44 @@ impl CompilationManager {
         Ok(is_optimism)
     }
 
-    /// Get the path to the cached binary
-    pub fn get_cached_binary_path(&self, git_ref: &str, is_optimism: bool) -> PathBuf {
+    /// Get the path to the cached binary using explicit commit hash
+    pub fn get_cached_binary_path_for_commit(&self, commit: &str, is_optimism: bool) -> PathBuf {
+        let identifier = &commit[..8]; // Use first 8 chars of commit
+        
         let binary_name = if is_optimism {
-            format!("op-reth_{}", sanitize_git_ref(git_ref))
+            format!("op-reth_{}", identifier)
         } else {
-            format!("reth_{}", sanitize_git_ref(git_ref))
+            format!("reth_{}", identifier)
         };
         
         self.output_dir.join("bin").join(binary_name)
     }
 
-    /// Check if a cached binary's commit matches the current git commit
-    fn check_cached_binary_commit(&self, binary_path: &PathBuf) -> Result<Option<String>> {
-        if !binary_path.exists() {
-            return Ok(None);
-        }
-
-        // Run the binary with --version
-        let output = Command::new(binary_path)
-            .arg("--version")
-            .output()
-            .wrap_err("Failed to execute cached binary with --version")?;
-
-        if !output.status.success() {
-            warn!("Cached binary failed to run --version, will recompile");
-            return Ok(None);
-        }
-
-        let version_output = String::from_utf8_lossy(&output.stdout);
-
-        // Parse the commit SHA from the version output
-        // Looking for line: "Commit SHA: 30110bca049a7d50ca53c6378e693287bcddaf5a"
-        for line in version_output.lines() {
-            if let Some(sha) = line.strip_prefix("Commit SHA: ") {
-                return Ok(Some(sha.trim().to_string()));
-            }
-        }
-
-        warn!("Could not find commit SHA in cached binary version output");
-        Ok(None)
-    }
 
     /// Compile reth using `make profiling` and cache the binary
-    pub fn compile_reth(&self, git_ref: &str, is_optimism: bool) -> Result<()> {
-        let cached_path = self.get_cached_binary_path(git_ref, is_optimism);
-
-        // Check if we have a cached binary with matching commit
-        if let Some(cached_commit) = self.check_cached_binary_commit(&cached_path)? {
-            let current_commit = self.git_manager.get_current_commit()?;
-
-            if cached_commit == current_commit {
-                info!(
-                    "Using cached binary for {} (commit: {})",
-                    git_ref,
-                    &cached_commit[..8]
-                );
-                return Ok(());
-            } else {
-                info!(
-                    "Cached binary commit mismatch for {} (cached: {}, current: {})",
-                    git_ref,
-                    &cached_commit[..8],
-                    &current_commit[..8]
-                );
-                info!("Recompiling...");
-            }
-        } else {
-            info!("No valid cached binary found for {}, compiling...", git_ref);
+    pub fn compile_reth(&self, commit: &str, is_optimism: bool) -> Result<()> {
+        // Validate that current git commit matches the expected commit
+        let current_commit = self.git_manager.get_current_commit()?;
+        if current_commit != commit {
+            return Err(eyre!(
+                "Git commit mismatch! Expected: {}, but currently at: {}",
+                &commit[..8],
+                &current_commit[..8]
+            ));
         }
+
+        let cached_path = self.get_cached_binary_path_for_commit(commit, is_optimism);
+
+        // Check if cached binary already exists (since path contains commit hash, it's valid)
+        if cached_path.exists() {
+            info!(
+                "Using cached binary (commit: {})",
+                &commit[..8]
+            );
+            return Ok(());
+        }
+
+        info!("No cached binary found, compiling (commit: {})...", &commit[..8]);
 
         let (make_target, binary_name) = if is_optimism {
             ("profiling-op", "op-reth")
@@ -127,8 +96,8 @@ impl CompilationManager {
         };
 
         info!(
-            "Compiling {} with profiling configuration for {}...",
-            binary_name, git_ref
+            "Compiling {} with profiling configuration (commit: {})...",
+            binary_name, &commit[..8]
         );
 
         let mut cmd = Command::new("make");

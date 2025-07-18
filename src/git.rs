@@ -354,10 +354,6 @@ impl GitManager {
     }
 }
 
-/// Sanitize a git reference for use in file names.
-pub fn sanitize_git_ref(git_ref: &str) -> String {
-    git_ref.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "-")
-}
 
 #[cfg(test)]
 mod tests {
@@ -379,11 +375,4 @@ mod tests {
         }
     }
 
-    #[test]
-    fn test_sanitize_git_ref() {
-        assert_eq!(sanitize_git_ref("feature/test"), "feature-test");
-        assert_eq!(sanitize_git_ref("v1.0.0"), "v1.0.0");
-        assert_eq!(sanitize_git_ref("feat:fix/issue?"), "feat-fix-issue-");
-        assert_eq!(sanitize_git_ref("abc123def456"), "abc123def456");
-    }
 }

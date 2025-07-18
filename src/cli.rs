@@ -309,6 +309,51 @@ fn parse_args_string(args_str: &str) -> Vec<String> {
     })
 }
 
+/// Run compilation phase for both baseline and feature binaries
+async fn run_compilation_phase(
+    git_manager: &GitManager,
+    compilation_manager: &CompilationManager,
+    args: &Args,
+    is_optimism: bool,
+) -> Result<(String, String)> {
+    info!("=== Running compilation phase ===");
+    
+    // Ensure required tools are available (only need to check once)
+    compilation_manager.ensure_reth_bench_available()?;
+    if args.profile {
+        compilation_manager.ensure_samply_available()?;
+    }
+    
+    let refs = [&args.baseline_ref, &args.feature_ref];
+    let ref_types = ["baseline", "feature"];
+    let mut commits = Vec::new();
+    
+    for (i, &git_ref) in refs.iter().enumerate() {
+        let ref_type = ref_types[i];
+        info!("Compiling {} binary for reference: {}", ref_type, git_ref);
+        
+        // Switch to target reference
+        git_manager.switch_ref(git_ref)?;
+        
+        // Get the current commit for this reference
+        let commit = git_manager.get_current_commit()?;
+        commits.push(commit.clone());
+        
+        info!("Reference {} resolves to commit: {}", git_ref, &commit[..8]);
+        
+        // Compile reth (with caching)
+        compilation_manager.compile_reth(&commit, is_optimism)?;
+        
+        info!("Completed compilation for {} reference", ref_type);
+    }
+    
+    let baseline_commit = commits[0].clone();
+    let feature_commit = commits[1].clone();
+    
+    info!("Compilation phase completed");
+    Ok((baseline_commit, feature_commit))
+}
+
 /// Run warmup phase to warm up caches before benchmarking
 async fn run_warmup_phase(
     git_manager: &GitManager,
@@ -317,6 +362,7 @@ async fn run_warmup_phase(
     benchmark_runner: &BenchmarkRunner,
     args: &Args,
     is_optimism: bool,
+    baseline_commit: &str,
 ) -> Result<()> {
     info!("=== Running warmup phase ===");
     
@@ -326,12 +372,18 @@ async fn run_warmup_phase(
     // Switch to baseline reference
     git_manager.switch_ref(warmup_ref)?;
     
-    // Compile reth (with caching) and ensure reth-bench is available
-    compilation_manager.compile_reth(warmup_ref, is_optimism)?;
-    compilation_manager.ensure_reth_bench_available()?;
+    // Get the cached binary path for baseline (should already be compiled)
+    let binary_path = compilation_manager.get_cached_binary_path_for_commit(baseline_commit, is_optimism);
     
-    // Get the binary path for warmup
-    let binary_path = compilation_manager.get_cached_binary_path(warmup_ref, is_optimism);
+    // Verify the cached binary exists
+    if !binary_path.exists() {
+        return Err(eyre!(
+            "Cached baseline binary not found at {:?}. Compilation phase should have created it.",
+            binary_path
+        ));
+    }
+    
+    info!("Using cached baseline binary for warmup (commit: {})", &baseline_commit[..8]);
     
     // Get baseline additional arguments for warmup
     let additional_args = args.baseline_args.as_ref().map(|s| parse_args_string(s)).unwrap_or_default();
@@ -376,32 +428,36 @@ async fn run_benchmark_workflow(
     // Detect if this is an Optimism chain once at the beginning
     let is_optimism = compilation_manager.detect_optimism_chain(&args.rpc_url).await?;
     
+    // Run compilation phase for both binaries
+    let (baseline_commit, feature_commit) = run_compilation_phase(git_manager, compilation_manager, args, is_optimism).await?;
+    
     // Run warmup phase before benchmarking
-    run_warmup_phase(git_manager, compilation_manager, node_manager, benchmark_runner, args, is_optimism).await?;
+    run_warmup_phase(git_manager, compilation_manager, node_manager, benchmark_runner, args, is_optimism, &baseline_commit).await?;
     
     let refs = [&args.baseline_ref, &args.feature_ref];
     let ref_types = ["baseline", "feature"];
+    let commits = [&baseline_commit, &feature_commit];
 
     for (i, &git_ref) in refs.iter().enumerate() {
         let ref_type = ref_types[i];
+        let commit = commits[i];
         info!("=== Processing {} reference: {} ===", ref_type, git_ref);
 
         // Switch to target reference
         git_manager.switch_ref(git_ref)?;
 
-        // Compile reth (with caching) and ensure reth-bench is available
-        compilation_manager.compile_reth(git_ref, is_optimism)?;
-
-        // Always ensure reth-bench is available (compile if not found)
-        compilation_manager.ensure_reth_bench_available()?;
-
-        // Ensure samply is available if profiling is enabled
-        if args.profile {
-            compilation_manager.ensure_samply_available()?;
+        // Get the cached binary path for this git reference (should already be compiled)
+        let binary_path = compilation_manager.get_cached_binary_path_for_commit(commit, is_optimism);
+        
+        // Verify the cached binary exists
+        if !binary_path.exists() {
+            return Err(eyre!(
+                "Cached {} binary not found at {:?}. Compilation phase should have created it.",
+                ref_type, binary_path
+            ));
         }
-
-        // Get the binary path for this git reference
-        let binary_path = compilation_manager.get_cached_binary_path(git_ref, is_optimism);
+        
+        info!("Using cached {} binary (commit: {})", ref_type, &commit[..8]);
 
         // Get reference-specific additional arguments
         let additional_args = match ref_type {
