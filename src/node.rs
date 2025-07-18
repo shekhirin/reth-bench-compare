@@ -187,44 +187,6 @@ impl NodeManager {
         }
     }
 
-    /// Clear system caches to ensure clean benchmark conditions
-    async fn clear_caches(&self) -> Result<()> {
-        if !cfg!(target_os = "linux") {
-            info!("Skipping cache clearing on non-Linux platform");
-            return Ok(());
-        }
-        
-        info!("Clearing system caches...");
-        
-        // First run sync to flush dirty pages (always without sudo)
-        let sync_output = Command::new("sync")
-            .output()
-            .await
-            .wrap_err("Failed to execute sync command")?;
-        
-        if !sync_output.status.success() {
-            let stderr = String::from_utf8_lossy(&sync_output.stderr);
-            warn!("sync command failed: {}", stderr);
-            return Err(eyre!("sync command failed: {}", stderr));
-        }
-        
-        // Linux: clear page cache, dentries and inodes
-        let cache_clear_output = Command::new("sudo")
-            .args(["sh", "-c", "echo 3 > /proc/sys/vm/drop_caches"])
-            .output()
-            .await
-            .wrap_err("Failed to execute cache clear command")?;
-        
-        if cache_clear_output.status.success() {
-            info!("System caches cleared successfully");
-        } else {
-            let stderr = String::from_utf8_lossy(&cache_clear_output.stderr);
-            warn!("Failed to clear caches: {}", stderr);
-            return Err(eyre!("Failed to clear system caches: {}", stderr));
-        }
-        
-        Ok(())
-    }
 
     /// Start a reth node using the specified binary path and return the process handle
     pub async fn start_node(
@@ -234,9 +196,6 @@ impl NodeManager {
         ref_type: &str,
         additional_args: &[String],
     ) -> Result<tokio::process::Child> {
-        // Clear system caches before starting the node for clean benchmark conditions
-        self.clear_caches().await?;
-        
         // Store the binary path for later use (e.g., in unwind_to_block)
         self.binary_path = Some(binary_path.to_path_buf());
 
