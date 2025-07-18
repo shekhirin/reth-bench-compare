@@ -309,6 +309,61 @@ fn parse_args_string(args_str: &str) -> Vec<String> {
     })
 }
 
+/// Run warmup phase to warm up caches before benchmarking
+async fn run_warmup_phase(
+    git_manager: &GitManager,
+    compilation_manager: &CompilationManager,
+    node_manager: &mut NodeManager,
+    benchmark_runner: &BenchmarkRunner,
+    args: &Args,
+    is_optimism: bool,
+) -> Result<()> {
+    info!("=== Running warmup phase ===");
+    
+    // Use baseline for warmup
+    let warmup_ref = &args.baseline_ref;
+    
+    // Switch to baseline reference
+    git_manager.switch_ref(warmup_ref)?;
+    
+    // Compile reth (with caching) and ensure reth-bench is available
+    compilation_manager.compile_reth(warmup_ref, is_optimism)?;
+    compilation_manager.ensure_reth_bench_available()?;
+    
+    // Get the binary path for warmup
+    let binary_path = compilation_manager.get_cached_binary_path(warmup_ref, is_optimism);
+    
+    // Get baseline additional arguments for warmup
+    let additional_args = args.baseline_args.as_ref().map(|s| parse_args_string(s)).unwrap_or_default();
+    
+    // Start reth node for warmup
+    let mut node_process = node_manager.start_node(&binary_path, warmup_ref, "warmup", &additional_args).await?;
+    
+    // Wait for node to be ready and get its current tip
+    let current_tip = node_manager.wait_for_node_ready_and_get_tip().await?;
+    info!("Warmup node is ready at tip: {}", current_tip);
+    
+    // Store the tip we'll unwind back to
+    let original_tip = current_tip;
+    
+    // Clear filesystem caches before warmup run only
+    BenchmarkRunner::clear_fs_caches().await?;
+    
+    // Run warmup to warm up caches
+    benchmark_runner
+        .run_warmup(current_tip)
+        .await?;
+    
+    // Stop node before unwinding (node must be stopped to release database lock)
+    node_manager.stop_node(&mut node_process).await?;
+    
+    // Unwind back to starting block after warmup
+    node_manager.unwind_to_block(original_tip).await?;
+    
+    info!("Warmup phase completed");
+    Ok(())
+}
+
 /// Execute the complete benchmark workflow for both branches
 async fn run_benchmark_workflow(
     git_manager: &GitManager,
@@ -320,6 +375,9 @@ async fn run_benchmark_workflow(
 ) -> Result<()> {
     // Detect if this is an Optimism chain once at the beginning
     let is_optimism = compilation_manager.detect_optimism_chain(&args.rpc_url).await?;
+    
+    // Run warmup phase before benchmarking
+    run_warmup_phase(git_manager, compilation_manager, node_manager, benchmark_runner, args, is_optimism).await?;
     
     let refs = [&args.baseline_ref, &args.feature_ref];
     let ref_types = ["baseline", "feature"];
@@ -361,17 +419,6 @@ async fn run_benchmark_workflow(
 
         // Store the tip we'll unwind back to
         let original_tip = current_tip;
-
-        // Clear filesystem caches before warmup run only
-        BenchmarkRunner::clear_fs_caches().await?;
-
-        // Run warmup to warm up caches
-        benchmark_runner
-            .run_warmup(current_tip)
-            .await?;
-
-        // Unwind back to starting block after warmup
-        node_manager.unwind_to_block(original_tip).await?;
 
         // Calculate benchmark range
         // Note: reth-bench has an off-by-one error where it consumes the first block
