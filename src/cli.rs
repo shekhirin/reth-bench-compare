@@ -40,12 +40,8 @@ pub struct Args {
     pub blocks: u64,
 
     /// RPC endpoint for fetching block data
-    #[arg(
-        long,
-        value_name = "URL",
-        default_value = "https://reth-ethereum.ithaca.xyz/rpc"
-    )]
-    pub rpc_url: String,
+    #[arg(long, value_name = "URL")]
+    pub rpc_url: Option<String>,
 
     /// JWT secret file path
     ///
@@ -126,6 +122,24 @@ impl Args {
     pub fn init_tracing(&self) -> Result<Option<FileWorkerGuard>> {
         let guard = self.logs.init_tracing()?;
         Ok(guard)
+    }
+
+    /// Get the default RPC URL for a given chain
+    fn get_default_rpc_url(chain: &Chain) -> &'static str {
+        match chain.id() {
+            1 => "https://reth-ethereum.ithaca.xyz/rpc", // mainnet
+            8453 => "https://base-mainnet.rpc.ithaca.xyz", // base
+            84532 => "https://base-sepolia.rpc.ithaca.xyz", // base-sepolia
+            27082 => "https://rpc.hoodi.ethpandaops.io", // hoodi
+            _ => "https://reth-ethereum.ithaca.xyz/rpc", // fallback to mainnet
+        }
+    }
+
+    /// Get the RPC URL, using chain-specific default if not provided
+    pub fn get_rpc_url(&self) -> String {
+        self.rpc_url.clone().unwrap_or_else(|| {
+            Self::get_default_rpc_url(&self.chain).to_string()
+        })
     }
 
     /// Get the JWT secret path - either provided or derived from datadir
@@ -247,7 +261,8 @@ pub async fn run_comparison(args: Args, _ctx: CliContext) -> Result<()> {
     }
 
     // Validate RPC endpoint chain ID matches the specified chain
-    validate_rpc_chain_id(&args.rpc_url, &args.chain).await?;
+    let rpc_url = args.get_rpc_url();
+    validate_rpc_chain_id(&rpc_url, &args.chain).await?;
 
     // Setup signal handling for cleanup
     let git_manager_cleanup = git_manager.clone();
@@ -434,7 +449,8 @@ async fn run_benchmark_workflow(
     args: &Args,
 ) -> Result<()> {
     // Detect if this is an Optimism chain once at the beginning
-    let is_optimism = compilation_manager.detect_optimism_chain(&args.rpc_url).await?;
+    let rpc_url = args.get_rpc_url();
+    let is_optimism = compilation_manager.detect_optimism_chain(&rpc_url).await?;
     
     // Run compilation phase for both binaries
     let (baseline_commit, feature_commit) = run_compilation_phase(git_manager, compilation_manager, args, is_optimism).await?;
