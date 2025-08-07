@@ -114,6 +114,8 @@ impl NodeManager {
             "--http".to_string(),
             "--http.api".to_string(),
             "eth".to_string(),
+            "--disable-discovery".to_string(),
+            "--trusted-only".to_string(),
         ]);
 
         // Add any additional arguments passed via command line (common to both baseline and feature)
