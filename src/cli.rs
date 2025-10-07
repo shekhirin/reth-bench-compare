@@ -94,6 +94,11 @@ pub struct Args {
     #[arg(long, value_name = "N")]
     pub warmup_blocks: Option<u64>,
 
+    /// Disable filesystem cache clearing before warmup phase.
+    /// By default, filesystem caches are cleared before warmup to ensure consistent benchmarks.
+    #[arg(long)]
+    pub no_clear_cache: bool,
+
     #[command(flatten)]
     pub logs: LogArgs,
 
@@ -420,10 +425,14 @@ async fn run_warmup_phase(
     
     // Store the tip we'll unwind back to
     let original_tip = current_tip;
-    
-    // Clear filesystem caches before warmup run only
-    BenchmarkRunner::clear_fs_caches().await?;
-    
+
+    // Clear filesystem caches before warmup run only (unless disabled)
+    if !args.no_clear_cache {
+        BenchmarkRunner::clear_fs_caches().await?;
+    } else {
+        info!("Skipping filesystem cache clearing (--no-clear-cache flag set)");
+    }
+
     // Run warmup to warm up caches
     benchmark_runner
         .run_warmup(current_tip)
