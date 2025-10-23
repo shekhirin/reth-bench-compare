@@ -121,11 +121,11 @@ reth-bench-compare/
 
 The tool measures and compares:
 
-- **NewPayload latency**: Time to process new payload
-- **ForkchoiceUpdated latency**: Time to update fork choice
-- **Total latency**: Combined processing time
+- **NewPayload latency**: Time to process new payload (the primary metric for block processing performance)
 - **Gas processed per second**: Throughput metric
 - **Blocks processed per second**: Block processing rate
+
+Note: ForkchoiceUpdated (FCU) latency is not reported as it's consistently ~1-2ms and not affected by block processing optimizations.
 
 ## How It Works
 

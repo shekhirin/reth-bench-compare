@@ -86,8 +86,6 @@ pub struct RefInfo {
 #[derive(Debug, Serialize)]
 pub struct ComparisonSummary {
     pub new_payload_latency_change_percent: f64,
-    pub fcu_latency_change_percent: f64,
-    pub total_latency_change_percent: f64,
     pub gas_per_second_change_percent: f64,
     pub blocks_per_second_change_percent: f64,
 }
@@ -161,7 +159,12 @@ impl ComparisonGenerator {
     }
 
     /// Set the benchmark run timestamps for a reference
-    pub fn set_ref_timestamps(&mut self, ref_type: &str, start: DateTime<Utc>, end: DateTime<Utc>) -> Result<()> {
+    pub fn set_ref_timestamps(
+        &mut self,
+        ref_type: &str,
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    ) -> Result<()> {
         match ref_type {
             "baseline" => {
                 if let Some(ref mut results) = self.baseline_results {
@@ -170,7 +173,7 @@ impl ComparisonGenerator {
                 } else {
                     return Err(eyre!("Baseline results not loaded yet"));
                 }
-            },
+            }
             "feature" => {
                 if let Some(ref mut results) = self.feature_results {
                     results.start_timestamp = Some(start);
@@ -178,7 +181,7 @@ impl ComparisonGenerator {
                 } else {
                     return Err(eyre!("Feature results not loaded yet"));
                 }
-            },
+            }
             _ => return Err(eyre!("Unknown reference type: {}", ref_type)),
         }
 
@@ -369,14 +372,6 @@ impl ComparisonGenerator {
                 baseline.avg_new_payload_latency_ms,
                 feature.avg_new_payload_latency_ms,
             ),
-            fcu_latency_change_percent: calc_percent_change(
-                baseline.avg_fcu_latency_ms,
-                feature.avg_fcu_latency_ms,
-            ),
-            total_latency_change_percent: calc_percent_change(
-                baseline.avg_total_latency_ms,
-                feature.avg_total_latency_ms,
-            ),
             gas_per_second_change_percent: calc_percent_change(
                 baseline.gas_per_second,
                 feature.gas_per_second,
@@ -493,14 +488,6 @@ impl ComparisonGenerator {
             summary.new_payload_latency_change_percent
         );
         println!(
-            "  FCU Latency:        {:+.2}%",
-            summary.fcu_latency_change_percent
-        );
-        println!(
-            "  Total Latency:      {:+.2}%",
-            summary.total_latency_change_percent
-        );
-        println!(
             "  Gas/Second:         {:+.2}%",
             summary.gas_per_second_change_percent
         );
@@ -519,13 +506,18 @@ impl ComparisonGenerator {
             baseline.total_duration_ms as f64 / 1000.0
         );
         println!(
-            "  Avg NewPayload: {:.2}ms, Avg FCU: {:.2}ms, Avg Total: {:.2}ms",
-            baseline.avg_new_payload_latency_ms,
-            baseline.avg_fcu_latency_ms,
-            baseline.avg_total_latency_ms
+            "  Avg NewPayload: {:.2}ms",
+            baseline.avg_new_payload_latency_ms
         );
-        if let (Some(start), Some(end)) = (&report.baseline.start_timestamp, &report.baseline.end_timestamp) {
-            println!("  Started: {}, Ended: {}", start.format("%Y-%m-%d %H:%M:%S UTC"), end.format("%Y-%m-%d %H:%M:%S UTC"));
+        if let (Some(start), Some(end)) = (
+            &report.baseline.start_timestamp,
+            &report.baseline.end_timestamp,
+        ) {
+            println!(
+                "  Started: {}, Ended: {}",
+                start.format("%Y-%m-%d %H:%M:%S UTC"),
+                end.format("%Y-%m-%d %H:%M:%S UTC")
+            );
         }
         println!();
 
@@ -538,13 +530,18 @@ impl ComparisonGenerator {
             feature.total_duration_ms as f64 / 1000.0
         );
         println!(
-            "  Avg NewPayload: {:.2}ms, Avg FCU: {:.2}ms, Avg Total: {:.2}ms",
-            feature.avg_new_payload_latency_ms,
-            feature.avg_fcu_latency_ms,
-            feature.avg_total_latency_ms
+            "  Avg NewPayload: {:.2}ms",
+            feature.avg_new_payload_latency_ms
         );
-        if let (Some(start), Some(end)) = (&report.feature.start_timestamp, &report.feature.end_timestamp) {
-            println!("  Started: {}, Ended: {}", start.format("%Y-%m-%d %H:%M:%S UTC"), end.format("%Y-%m-%d %H:%M:%S UTC"));
+        if let (Some(start), Some(end)) = (
+            &report.feature.start_timestamp,
+            &report.feature.end_timestamp,
+        ) {
+            println!(
+                "  Started: {}, Ended: {}",
+                start.format("%Y-%m-%d %H:%M:%S UTC"),
+                end.format("%Y-%m-%d %H:%M:%S UTC")
+            );
         }
         println!();
     }

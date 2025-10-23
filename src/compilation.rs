@@ -28,7 +28,7 @@ impl CompilationManager {
     /// Detect if the RPC endpoint is an Optimism chain
     pub async fn detect_optimism_chain(&self, rpc_url: &str) -> Result<bool> {
         info!("Detecting chain type from RPC endpoint...");
-        
+
         // Create Alloy provider
         let url = rpc_url
             .parse()
@@ -53,16 +53,15 @@ impl CompilationManager {
     /// Get the path to the cached binary using explicit commit hash
     pub fn get_cached_binary_path_for_commit(&self, commit: &str, is_optimism: bool) -> PathBuf {
         let identifier = &commit[..8]; // Use first 8 chars of commit
-        
+
         let binary_name = if is_optimism {
             format!("op-reth_{}", identifier)
         } else {
             format!("reth_{}", identifier)
         };
-        
+
         self.output_dir.join("bin").join(binary_name)
     }
-
 
     /// Compile reth using `make profiling` and cache the binary
     pub fn compile_reth(&self, commit: &str, is_optimism: bool) -> Result<()> {
@@ -80,14 +79,14 @@ impl CompilationManager {
 
         // Check if cached binary already exists (since path contains commit hash, it's valid)
         if cached_path.exists() {
-            info!(
-                "Using cached binary (commit: {})",
-                &commit[..8]
-            );
+            info!("Using cached binary (commit: {})", &commit[..8]);
             return Ok(());
         }
 
-        info!("No cached binary found, compiling (commit: {})...", &commit[..8]);
+        info!(
+            "No cached binary found, compiling (commit: {})...",
+            &commit[..8]
+        );
 
         let (make_target, binary_name) = if is_optimism {
             ("profiling-op", "op-reth")
@@ -97,7 +96,8 @@ impl CompilationManager {
 
         info!(
             "Compiling {} with profiling configuration (commit: {})...",
-            binary_name, &commit[..8]
+            binary_name,
+            &commit[..8]
         );
 
         let mut cmd = Command::new("make");
@@ -156,7 +156,8 @@ impl CompilationManager {
         info!("{} compilation completed", binary_name);
 
         // Copy the compiled binary to cache
-        let source_path = PathBuf::from(&self.repo_root).join(format!("target/profiling/{}", binary_name));
+        let source_path =
+            PathBuf::from(&self.repo_root).join(format!("target/profiling/{}", binary_name));
         if !source_path.exists() {
             return Err(eyre!("Compiled binary not found at {:?}", source_path));
         }

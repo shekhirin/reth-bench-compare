@@ -354,7 +354,6 @@ impl GitManager {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -374,5 +373,4 @@ mod tests {
             println!("Current git reference: {ref_str}");
         }
     }
-
 }

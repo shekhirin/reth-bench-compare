@@ -34,24 +34,24 @@ impl BenchmarkRunner {
     /// Clear filesystem caches (page cache, dentries, and inodes)
     pub async fn clear_fs_caches() -> Result<()> {
         info!("Clearing filesystem caches...");
-        
+
         // First sync to ensure all pending writes are flushed
         let sync_output = Command::new("sync")
             .output()
             .await
             .wrap_err("Failed to execute sync command")?;
-            
+
         if !sync_output.status.success() {
             return Err(eyre!("sync command failed"));
         }
-        
+
         // Drop caches - requires sudo/root permissions
         // 3 = drop pagecache, dentries, and inodes
         let drop_caches_cmd = Command::new("sudo")
             .args(["-n", "sh", "-c", "echo 3 > /proc/sys/vm/drop_caches"])
             .output()
             .await;
-            
+
         match drop_caches_cmd {
             Ok(output) if output.status.success() => {
                 info!("Successfully cleared filesystem caches");
@@ -61,7 +61,9 @@ impl BenchmarkRunner {
                 let stderr = String::from_utf8_lossy(&output.stderr);
                 if stderr.contains("sudo: a password is required") {
                     warn!("Unable to clear filesystem caches: sudo password required");
-                    warn!("For optimal benchmarking, configure passwordless sudo for cache clearing:");
+                    warn!(
+                        "For optimal benchmarking, configure passwordless sudo for cache clearing:"
+                    );
                     warn!("  echo '$USER ALL=(ALL) NOPASSWD: /bin/sh -c echo\\\\ [0-9]\\\\ \\\\>\\\\ /proc/sys/vm/drop_caches' | sudo tee /etc/sudoers.d/drop_caches");
                     Ok(())
                 } else {
@@ -115,7 +117,9 @@ impl BenchmarkRunner {
         debug!("Executing warmup reth-bench command: {:?}", cmd);
 
         // Execute the warmup benchmark
-        let mut child = cmd.spawn().wrap_err("Failed to start warmup reth-bench process")?;
+        let mut child = cmd
+            .spawn()
+            .wrap_err("Failed to start warmup reth-bench process")?;
 
         // Stream output at debug level
         if let Some(stdout) = child.stdout.take() {

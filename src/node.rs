@@ -52,7 +52,10 @@ impl NodeManager {
             if !rate_str.is_empty() {
                 if let Ok(system_rate) = rate_str.parse::<u32>() {
                     let capped_rate = std::cmp::min(system_rate, 10000);
-                    info!("Detected perf_event_max_sample_rate: {}, using: {}", system_rate, capped_rate);
+                    info!(
+                        "Detected perf_event_max_sample_rate: {}, using: {}",
+                        system_rate, capped_rate
+                    );
                     return Some(capped_rate.to_string());
                 } else {
                     warn!("Failed to parse perf_event_max_sample_rate: {}", rate_str);
@@ -188,7 +191,6 @@ impl NodeManager {
             cmd
         }
     }
-
 
     /// Start a reth node using the specified binary path and return the process handle
     pub async fn start_node(
@@ -343,10 +345,7 @@ impl NodeManager {
             }
             Ok(None) => {
                 // Process is still running, proceed to stop it
-                info!(
-                    "Stopping process gracefully with SIGINT (PID: {})...",
-                    pid
-                );
+                info!("Stopping process gracefully with SIGINT (PID: {})...", pid);
             }
             Err(e) => {
                 return Err(eyre!("Failed to check process status: {}", e));
