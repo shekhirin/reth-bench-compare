@@ -122,8 +122,6 @@ reth-bench-compare/
 The tool measures and compares:
 
 - **NewPayload latency**: Time to process new payload
-- **ForkchoiceUpdated latency**: Time to update fork choice
-- **Total latency**: Combined processing time
 - **Gas processed per second**: Throughput metric
 - **Blocks processed per second**: Block processing rate
 

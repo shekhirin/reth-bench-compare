@@ -38,8 +38,6 @@ pub struct CombinedLatencyRow {
     pub block_number: u64,
     pub gas_used: u64,
     pub new_payload_latency: u128,
-    pub fcu_latency: u128,
-    pub total_latency: u128,
 }
 
 /// Total gas CSV row structure
@@ -57,8 +55,6 @@ pub struct BenchmarkSummary {
     pub total_gas_used: u64,
     pub total_duration_ms: u128,
     pub avg_new_payload_latency_ms: f64,
-    pub avg_fcu_latency_ms: f64,
-    pub avg_total_latency_ms: f64,
     pub gas_per_second: f64,
     pub blocks_per_second: f64,
 }
@@ -86,8 +82,6 @@ pub struct RefInfo {
 #[derive(Debug, Serialize)]
 pub struct ComparisonSummary {
     pub new_payload_latency_change_percent: f64,
-    pub fcu_latency_change_percent: f64,
-    pub total_latency_change_percent: f64,
     pub gas_per_second_change_percent: f64,
     pub blocks_per_second_change_percent: f64,
 }
@@ -99,9 +93,6 @@ pub struct BlockComparison {
     pub baseline_new_payload_latency: u128,
     pub feature_new_payload_latency: u128,
     pub new_payload_latency_change_percent: f64,
-    pub baseline_total_latency: u128,
-    pub feature_total_latency: u128,
-    pub total_latency_change_percent: f64,
 }
 
 impl ComparisonGenerator {
@@ -313,18 +304,6 @@ impl ComparisonGenerator {
             .sum::<f64>()
             / total_blocks as f64;
 
-        let avg_fcu_latency_ms: f64 = combined_data
-            .iter()
-            .map(|r| r.fcu_latency as f64 / 1000.0)
-            .sum::<f64>()
-            / total_blocks as f64;
-
-        let avg_total_latency_ms: f64 = combined_data
-            .iter()
-            .map(|r| r.total_latency as f64 / 1000.0)
-            .sum::<f64>()
-            / total_blocks as f64;
-
         let total_duration_seconds = total_duration_ms as f64 / 1000.0;
         let gas_per_second = if total_duration_seconds > 0.0 {
             total_gas_used as f64 / total_duration_seconds
@@ -343,8 +322,6 @@ impl ComparisonGenerator {
             total_gas_used,
             total_duration_ms,
             avg_new_payload_latency_ms,
-            avg_fcu_latency_ms,
-            avg_total_latency_ms,
             gas_per_second,
             blocks_per_second,
         })
@@ -368,14 +345,6 @@ impl ComparisonGenerator {
             new_payload_latency_change_percent: calc_percent_change(
                 baseline.avg_new_payload_latency_ms,
                 feature.avg_new_payload_latency_ms,
-            ),
-            fcu_latency_change_percent: calc_percent_change(
-                baseline.avg_fcu_latency_ms,
-                feature.avg_fcu_latency_ms,
-            ),
-            total_latency_change_percent: calc_percent_change(
-                baseline.avg_total_latency_ms,
-                feature.avg_total_latency_ms,
             ),
             gas_per_second_change_percent: calc_percent_change(
                 baseline.gas_per_second,
@@ -417,12 +386,6 @@ impl ComparisonGenerator {
                     new_payload_latency_change_percent: calc_percent_change(
                         baseline_row.new_payload_latency,
                         feature_row.new_payload_latency,
-                    ),
-                    baseline_total_latency: baseline_row.total_latency,
-                    feature_total_latency: feature_row.total_latency,
-                    total_latency_change_percent: calc_percent_change(
-                        baseline_row.total_latency,
-                        feature_row.total_latency,
                     ),
                 };
                 comparisons.push(comparison);
@@ -493,14 +456,6 @@ impl ComparisonGenerator {
             summary.new_payload_latency_change_percent
         );
         println!(
-            "  FCU Latency:        {:+.2}%",
-            summary.fcu_latency_change_percent
-        );
-        println!(
-            "  Total Latency:      {:+.2}%",
-            summary.total_latency_change_percent
-        );
-        println!(
             "  Gas/Second:         {:+.2}%",
             summary.gas_per_second_change_percent
         );
@@ -519,10 +474,8 @@ impl ComparisonGenerator {
             baseline.total_duration_ms as f64 / 1000.0
         );
         println!(
-            "  Avg NewPayload: {:.2}ms, Avg FCU: {:.2}ms, Avg Total: {:.2}ms",
-            baseline.avg_new_payload_latency_ms,
-            baseline.avg_fcu_latency_ms,
-            baseline.avg_total_latency_ms
+            "  Avg NewPayload: {:.2}ms",
+            baseline.avg_new_payload_latency_ms
         );
         if let (Some(start), Some(end)) = (&report.baseline.start_timestamp, &report.baseline.end_timestamp) {
             println!("  Started: {}, Ended: {}", start.format("%Y-%m-%d %H:%M:%S UTC"), end.format("%Y-%m-%d %H:%M:%S UTC"));
@@ -538,10 +491,8 @@ impl ComparisonGenerator {
             feature.total_duration_ms as f64 / 1000.0
         );
         println!(
-            "  Avg NewPayload: {:.2}ms, Avg FCU: {:.2}ms, Avg Total: {:.2}ms",
-            feature.avg_new_payload_latency_ms,
-            feature.avg_fcu_latency_ms,
-            feature.avg_total_latency_ms
+            "  Avg NewPayload: {:.2}ms",
+            feature.avg_new_payload_latency_ms
         );
         if let (Some(start), Some(end)) = (&report.feature.start_timestamp, &report.feature.end_timestamp) {
             println!("  Started: {}, Ended: {}", start.format("%Y-%m-%d %H:%M:%S UTC"), end.format("%Y-%m-%d %H:%M:%S UTC"));
