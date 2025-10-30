@@ -62,6 +62,7 @@ reth-bench-compare \
   --datadir ~/.local/share/reth/sepolia \
   --rpc-url https://rpc.sepolia.org \
   --output-dir ./my-benchmark \
+  --features jemalloc,asm-keccak \
   --profile \
   --draw \
   --wait-time 100ms \
@@ -75,11 +76,28 @@ reth-bench-compare \
 - `--chain`: Blockchain network (mainnet, sepolia, holesky, etc.)
 - `--datadir`: Path to reth data directory
 - `--rpc-url`: External RPC endpoint for fetching blocks
+- `--features`: Comma-separated list of cargo features to enable during compilation (default: `jemalloc,asm-keccak`)
 - `--profile`: Enable CPU profiling with samply
 - `--draw`: Generate comparison charts
 - `--wait-time`: Delay between engine API calls (passed to reth-bench)
 - `--sudo`: Run reth with elevated privileges
 - `-v/-vv/-vvv`: Increase verbosity (debug output with -vvv)
+
+### Custom Compilation Features
+
+By default, reth is compiled with `jemalloc,asm-keccak` features. You can customize this using the `--features` flag:
+
+```bash
+reth-bench-compare \
+  --baseline-ref main \
+  --feature-ref feature-branch \
+  --blocks 100 \
+  --features jemalloc,asm-keccak,dev
+```
+
+The tool uses direct cargo build commands instead of make targets:
+- For Ethereum: `RUSTFLAGS="-C target-cpu=native" cargo build --profile profiling --features <features>`
+- For Optimism: `RUSTFLAGS="-C target-cpu=native" cargo build --profile profiling --features <features> --bin op-reth --manifest-path crates/optimism/bin/Cargo.toml`
 
 ### Passing Additional Arguments to Reth
 

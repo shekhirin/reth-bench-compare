@@ -120,6 +120,12 @@ pub struct Args {
     /// Example: `reth-bench-compare --baseline-ref main --feature-ref pr/123 -- --debug.tip 0xabc...`
     #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
     pub reth_args: Vec<String>,
+
+    /// Comma-separated list of features to enable during reth compilation
+    ///
+    /// Example: `jemalloc,asm-keccak`
+    #[arg(long, value_name = "FEATURES", default_value = "jemalloc,asm-keccak")]
+    pub features: String,
 }
 
 impl Args {
@@ -132,19 +138,19 @@ impl Args {
     /// Get the default RPC URL for a given chain
     fn get_default_rpc_url(chain: &Chain) -> &'static str {
         match chain.id() {
-            1 => "https://reth-ethereum.ithaca.xyz/rpc", // mainnet
+            1 => "https://reth-ethereum.ithaca.xyz/rpc",   // mainnet
             8453 => "https://base-mainnet.rpc.ithaca.xyz", // base
             84532 => "https://base-sepolia.rpc.ithaca.xyz", // base-sepolia
-            27082 => "https://rpc.hoodi.ethpandaops.io", // hoodi
-            _ => "https://reth-ethereum.ithaca.xyz/rpc", // fallback to mainnet
+            27082 => "https://rpc.hoodi.ethpandaops.io",   // hoodi
+            _ => "https://reth-ethereum.ithaca.xyz/rpc",   // fallback to mainnet
         }
     }
 
     /// Get the RPC URL, using chain-specific default if not provided
     pub fn get_rpc_url(&self) -> String {
-        self.rpc_url.clone().unwrap_or_else(|| {
-            Self::get_default_rpc_url(&self.chain).to_string()
-        })
+        self.rpc_url
+            .clone()
+            .unwrap_or_else(|| Self::get_default_rpc_url(&self.chain).to_string())
     }
 
     /// Get the JWT secret path - either provided or derived from datadir
@@ -248,6 +254,7 @@ pub async fn run_comparison(args: Args, _ctx: CliContext) -> Result<()> {
         git_manager.repo_root().to_string(),
         output_dir.clone(),
         git_manager.clone(),
+        args.features.clone(),
     )?;
     // Initialize node manager
     let mut node_manager = NodeManager::new(&args);
@@ -337,16 +344,16 @@ async fn run_compilation_phase(
     is_optimism: bool,
 ) -> Result<(String, String)> {
     info!("=== Running compilation phase ===");
-    
+
     // Ensure required tools are available (only need to check once)
     compilation_manager.ensure_reth_bench_available()?;
     if args.profile {
         compilation_manager.ensure_samply_available()?;
     }
-    
+
     let refs = [&args.baseline_ref, &args.feature_ref];
     let ref_types = ["baseline", "feature"];
-    
+
     // First, resolve all refs to commits using a HashMap to avoid race conditions where a ref is
     // pushed to mid-run.
     let mut ref_commits = std::collections::HashMap::new();
@@ -355,29 +362,38 @@ async fn run_compilation_phase(
             git_manager.switch_ref(git_ref)?;
             let commit = git_manager.get_current_commit()?;
             ref_commits.insert(git_ref.to_string(), commit);
-            info!("Reference {} resolves to commit: {}", git_ref, &ref_commits[git_ref][..8]);
+            info!(
+                "Reference {} resolves to commit: {}",
+                git_ref,
+                &ref_commits[git_ref][..8]
+            );
         }
     }
-    
+
     // Now compile each ref using the resolved commits
     for (i, &git_ref) in refs.iter().enumerate() {
         let ref_type = ref_types[i];
         let commit = &ref_commits[git_ref];
-        
-        info!("Compiling {} binary for reference: {} (commit: {})", ref_type, git_ref, &commit[..8]);
-        
+
+        info!(
+            "Compiling {} binary for reference: {} (commit: {})",
+            ref_type,
+            git_ref,
+            &commit[..8]
+        );
+
         // Switch to target reference
         git_manager.switch_ref(git_ref)?;
-        
+
         // Compile reth (with caching)
         compilation_manager.compile_reth(commit, is_optimism)?;
-        
+
         info!("Completed compilation for {} reference", ref_type);
     }
-    
+
     let baseline_commit = ref_commits[&args.baseline_ref].clone();
     let feature_commit = ref_commits[&args.feature_ref].clone();
-    
+
     info!("Compilation phase completed");
     Ok((baseline_commit, feature_commit))
 }
@@ -393,16 +409,17 @@ async fn run_warmup_phase(
     baseline_commit: &str,
 ) -> Result<()> {
     info!("=== Running warmup phase ===");
-    
+
     // Use baseline for warmup
     let warmup_ref = &args.baseline_ref;
-    
+
     // Switch to baseline reference
     git_manager.switch_ref(warmup_ref)?;
-    
+
     // Get the cached binary path for baseline (should already be compiled)
-    let binary_path = compilation_manager.get_cached_binary_path_for_commit(baseline_commit, is_optimism);
-    
+    let binary_path =
+        compilation_manager.get_cached_binary_path_for_commit(baseline_commit, is_optimism);
+
     // Verify the cached binary exists
     if !binary_path.exists() {
         return Err(eyre!(
@@ -410,19 +427,28 @@ async fn run_warmup_phase(
             binary_path
         ));
     }
-    
-    info!("Using cached baseline binary for warmup (commit: {})", &baseline_commit[..8]);
-    
+
+    info!(
+        "Using cached baseline binary for warmup (commit: {})",
+        &baseline_commit[..8]
+    );
+
     // Get baseline additional arguments for warmup
-    let additional_args = args.baseline_args.as_ref().map(|s| parse_args_string(s)).unwrap_or_default();
-    
+    let additional_args = args
+        .baseline_args
+        .as_ref()
+        .map(|s| parse_args_string(s))
+        .unwrap_or_default();
+
     // Start reth node for warmup
-    let mut node_process = node_manager.start_node(&binary_path, warmup_ref, "warmup", &additional_args).await?;
-    
+    let mut node_process = node_manager
+        .start_node(&binary_path, warmup_ref, "warmup", &additional_args)
+        .await?;
+
     // Wait for node to be ready and get its current tip
     let current_tip = node_manager.wait_for_node_ready_and_get_tip().await?;
     info!("Warmup node is ready at tip: {}", current_tip);
-    
+
     // Store the tip we'll unwind back to
     let original_tip = current_tip;
 
@@ -434,16 +460,14 @@ async fn run_warmup_phase(
     }
 
     // Run warmup to warm up caches
-    benchmark_runner
-        .run_warmup(current_tip)
-        .await?;
-    
+    benchmark_runner.run_warmup(current_tip).await?;
+
     // Stop node before unwinding (node must be stopped to release database lock)
     node_manager.stop_node(&mut node_process).await?;
-    
+
     // Unwind back to starting block after warmup
     node_manager.unwind_to_block(original_tip).await?;
-    
+
     info!("Warmup phase completed");
     Ok(())
 }
@@ -460,13 +484,23 @@ async fn run_benchmark_workflow(
     // Detect if this is an Optimism chain once at the beginning
     let rpc_url = args.get_rpc_url();
     let is_optimism = compilation_manager.detect_optimism_chain(&rpc_url).await?;
-    
+
     // Run compilation phase for both binaries
-    let (baseline_commit, feature_commit) = run_compilation_phase(git_manager, compilation_manager, args, is_optimism).await?;
-    
+    let (baseline_commit, feature_commit) =
+        run_compilation_phase(git_manager, compilation_manager, args, is_optimism).await?;
+
     // Run warmup phase before benchmarking
-    run_warmup_phase(git_manager, compilation_manager, node_manager, benchmark_runner, args, is_optimism, &baseline_commit).await?;
-    
+    run_warmup_phase(
+        git_manager,
+        compilation_manager,
+        node_manager,
+        benchmark_runner,
+        args,
+        is_optimism,
+        &baseline_commit,
+    )
+    .await?;
+
     let refs = [&args.baseline_ref, &args.feature_ref];
     let ref_types = ["baseline", "feature"];
     let commits = [&baseline_commit, &feature_commit];
@@ -480,27 +514,43 @@ async fn run_benchmark_workflow(
         git_manager.switch_ref(git_ref)?;
 
         // Get the cached binary path for this git reference (should already be compiled)
-        let binary_path = compilation_manager.get_cached_binary_path_for_commit(commit, is_optimism);
-        
+        let binary_path =
+            compilation_manager.get_cached_binary_path_for_commit(commit, is_optimism);
+
         // Verify the cached binary exists
         if !binary_path.exists() {
             return Err(eyre!(
                 "Cached {} binary not found at {:?}. Compilation phase should have created it.",
-                ref_type, binary_path
+                ref_type,
+                binary_path
             ));
         }
-        
-        info!("Using cached {} binary (commit: {})", ref_type, &commit[..8]);
+
+        info!(
+            "Using cached {} binary (commit: {})",
+            ref_type,
+            &commit[..8]
+        );
 
         // Get reference-specific additional arguments
         let additional_args = match ref_type {
-            "baseline" => args.baseline_args.as_ref().map(|s| parse_args_string(s)).unwrap_or_default(),
-            "feature" => args.feature_args.as_ref().map(|s| parse_args_string(s)).unwrap_or_default(),
+            "baseline" => args
+                .baseline_args
+                .as_ref()
+                .map(|s| parse_args_string(s))
+                .unwrap_or_default(),
+            "feature" => args
+                .feature_args
+                .as_ref()
+                .map(|s| parse_args_string(s))
+                .unwrap_or_default(),
             _ => Vec::new(),
         };
 
         // Start reth node
-        let mut node_process = node_manager.start_node(&binary_path, git_ref, ref_type, &additional_args).await?;
+        let mut node_process = node_manager
+            .start_node(&binary_path, git_ref, ref_type, &additional_args)
+            .await?;
 
         // Wait for node to be ready and get its current tip (wherever it is)
         let current_tip = node_manager.wait_for_node_ready_and_get_tip().await?;
