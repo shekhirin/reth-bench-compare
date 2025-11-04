@@ -1,5 +1,9 @@
 # reth-bench-compare
 
+> **⚠️ NOTICE: This repository has been moved to [`https://github.com/paradigmxyz/reth`](https://github.com/paradigmxyz/reth)**
+>
+> This standalone repository is no longer maintained. The tool is now part of the main reth monorepo.
+
 Automated performance comparison tool for reth across different git references.
 
 ## Overview
@@ -7,7 +11,7 @@ Automated performance comparison tool for reth across different git references.
 This tool automates the process of comparing reth performance between two git references (branches, tags, or commits) by:
 
 1. **Building reth** from each reference with optimized settings
-2. **Running identical benchmarks** on the same block ranges  
+2. **Running identical benchmarks** on the same block ranges
 3. **Generating detailed comparison reports** with metrics and visualizations
 
 ## Features
@@ -124,12 +128,12 @@ reth-bench-compare/
 │   └── reth_feature-branch        # Feature binary
 ├── profiles/                      # CPU profiling data (if --profile)
 │   ├── main.json.gz              # Baseline profile
-│   └── feature-branch.json.gz    # Feature profile  
+│   └── feature-branch.json.gz    # Feature profile
 └── results/                       # Benchmark results
     └── 2024-01-15_14-30-00/      # Timestamped results
         ├── baseline/              # Baseline reference data
         │   └── combined_latency.csv
-        ├── feature/               # Feature reference data  
+        ├── feature/               # Feature reference data
         │   └── combined_latency.csv
         ├── comparison_report.json # Detailed comparison
         └── latency_comparison.png # Visual chart (if --draw)
@@ -157,7 +161,7 @@ The tool measures and compares:
 ### Safety Features
 
 - **Git State Restoration**: Returns to original branch/tag/commit on exit
-- **Process Group Management**: Ensures all child processes exit cleanly  
+- **Process Group Management**: Ensures all child processes exit cleanly
 - **Graceful Shutdown**: Handles Ctrl+C and SIGTERM signals properly
 - **Validation**: Checks for uncommitted changes (allows untracked files)
 - **Error Recovery**: Handles process failures and provides clear guidance
@@ -228,7 +232,7 @@ reth-bench-compare --baseline-ref main --feature-ref opt -vvv
 This shows:
 - All command executions with Debug output
 - Git operations and status
-- Node startup and sync progress  
+- Node startup and sync progress
 - Samply server output (if profiling)
 - Detailed error information
 
